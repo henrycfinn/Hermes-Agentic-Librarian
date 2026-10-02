@@ -56,6 +56,13 @@ class FakeCtx:
         self.prompt_sections[name] = {"provider": provider, **kwargs}
 
 
+class LegacyCtx(FakeCtx):
+    """Older Hermes host: registration APIs, but no settings bridge."""
+
+    get_config = None
+    set_config = None
+
+
 class PluginRegistrationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -99,6 +106,18 @@ class PluginRegistrationTests(unittest.TestCase):
         hook = self.ctx.hooks["pre_tool_call"]
         result = hook(tool_name="librarian_configure", args={"policy_mode": "strict"})
         self.assertEqual(result["action"], "approve")
+
+    def test_registration_survives_legacy_context_without_config_bridge(self):
+        ctx = LegacyCtx({})
+        self.plugin.register(ctx)
+        self.assertEqual(len(ctx.tools), 9)
+        self.assertIn("pre_tool_call", ctx.hooks)
+
+    def test_legacy_context_reports_configuration_limit(self):
+        ctx = LegacyCtx({})
+        self.plugin.register(ctx)
+        result = ctx.tools["librarian_configure"]["handler"]({"policy_mode": "strict"})
+        self.assertIn("does not expose", result)
 
 
 if __name__ == "__main__":

@@ -10,10 +10,8 @@ It contains no Hermes-specific imports, making the trust logic easy to test.
 from __future__ import annotations
 
 import difflib
-import html
 import json
 import os
-import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -81,240 +79,6 @@ def _unified_diff(path: str, old: str | None, new: str | None, action: str) -> s
     )
     text = "".join(diff)
     return text[:80_000]
-
-
-def _diff_line_counts(diff: str) -> tuple[int, int]:
-    """Return added and removed content-line counts for a unified diff."""
-    added = 0
-    removed = 0
-    for line in diff.splitlines():
-        if line.startswith("+++") or line.startswith("---"):
-            continue
-        if line.startswith("+"):
-            added += 1
-        elif line.startswith("-"):
-            removed += 1
-    return added, removed
-
-
-def _diff_side_content(diff: str, marker: str) -> str:
-    """Extract one changed side of a unified diff, without diff headers."""
-    lines: list[str] = []
-    for line in diff.splitlines():
-        if line.startswith("+++") or line.startswith("---"):
-            continue
-        if line.startswith(marker):
-            lines.append(line[1:])
-    return "\n".join(lines).strip()
-
-
-def _content_preview(content: str, limit: int = 1_500) -> tuple[str, bool]:
-    """Return reviewable content for small changes and a safe bounded excerpt otherwise."""
-    if len(content) <= limit:
-        return content, False
-    return content[:limit].rstrip() + "\n…", True
-
-
-def _first_body_paragraph(content: str) -> str:
-    """Extract a short human-readable summary from a Markdown document."""
-    after_heading = False
-    paragraph: list[str] = []
-    for raw_line in content.splitlines():
-        line = raw_line.strip()
-        if line.startswith("# "):
-            after_heading = True
-            continue
-        if not after_heading:
-            continue
-        if not line:
-            if paragraph:
-                break
-            continue
-        if line.startswith("#") or line.startswith("-") or line.startswith("*"):
-            if paragraph:
-                break
-            continue
-        paragraph.append(line)
-    return " ".join(paragraph)[:360]
-
-
-def _review_response(action: str, count: int) -> tuple[str, str]:
-    noun = "file" if count == 1 else "files"
-    if action == "delete":
-        return (
-            f"Yes — delete these {count} {noun}.",
-            f"No — keep these {count} {noun}.",
-        )
-    return (
-        f"Yes — apply these {count} {noun} changes.",
-        f"No — do not apply these {count} {noun} changes.",
-    )
-
-
-def _review_filename(title: str, index: int, suffix: str) -> str:
-    """Make review attachments understandable in clients that show file names."""
-    cleaned = re.sub(r"[^A-Za-z0-9]+", "-", title).strip("-")[:72]
-    stem = cleaned or f"article-{index:02d}"
-    return f"{index:02d}-{stem}-{suffix}.html"
-
-
-def _review_pages(
-    config: LibrarianConfig,
-    proposal_id: str,
-    summary: str,
-    changes: list[dict[str, Any]],
-) -> tuple[str | None, list[str | None], list[str | None]]:
-    """Create non-canonical HTML diff pages for a staged proposal and its files."""
-    root = config.knowledge_root
-    if root is None:
-        return None, [None] * len(changes), [None] * len(changes)
-
-    sections: list[str] = []
-    individual_pages: list[str | None] = []
-    current_pages: list[str | None] = []
-    # Isolate a proposal's artifacts so attachment names can be human-readable
-    # in clients that ignore Markdown link labels and show only the basename.
-    review_folder = data_root() / "reviews" / proposal_id
-    header = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Librarian review</title>
-<style>
-body { font-family: system-ui, sans-serif; margin: 2rem; color: #1f2328; background: #fff; }
-h1 { margin-bottom: .25rem; } section { margin: 2rem 0; } pre { white-space: pre-wrap; border: 1px solid #d0d7de; padding: 1rem; background: #f6f8fa; }
-.added { color: #116329; background: #dafbe1; display: block; } .removed { color: #cf222e; background: #ffebe9; display: block; }
-.context { color: #1f2328; display: block; } .meta { color: #57606a; display: block; }
-a { color: #0969da; }
-</style></head><body>"""
-    for index, change in enumerate(changes, 1):
-        path = str(change.get("path", ""))
-        try:
-            absolute, _ = resolve_inside(root, path)
-            current_content = read_text(absolute) or ""
-        except (ValueError, OSError):
-            current_content = ""
-        diff_lines: list[str] = []
-        for line in str(change.get("diff", "")).splitlines():
-            if line.startswith("+++") or line.startswith("---") or line.startswith("@@"):
-                css_class = "meta"
-            elif line.startswith("+"):
-                css_class = "added"
-            elif line.startswith("-"):
-                css_class = "removed"
-            else:
-                css_class = "context"
-            diff_lines.append(f'<span class="{css_class}">{html.escape(line)}</span>')
-        change_content = change.get("content")
-        proposed_content = change_content if isinstance(change_content, str) else ""
-        display_title = _first_heading(proposed_content) or _first_heading(current_content) or Path(path).stem
-        title = html.escape(display_title)
-        rendered_diff = "\n".join(diff_lines)
-        section = f"<section id=\"change-{index}\"><h2>{title}</h2><p class=\"meta\">{html.escape(path)}</p><pre>{rendered_diff}</pre></section>"
-        sections.append(section)
-        detail_path = review_folder / _review_filename(display_title, index, "proposed-vs-current")
-        atomic_write_text(
-            detail_path,
-            header + f"<h1>Review: {html.escape(summary)}</h1><p>Green = proposed additions; red = deletions; black = unchanged context.</p>" + section + "</body></html>",
-        )
-        individual_pages.append(str(detail_path))
-        current_path = review_folder / _review_filename(display_title, index, "current-article")
-        atomic_write_text(
-            current_path,
-            header + f"<h1>Current article: {title}</h1><p class=\"meta\">{html.escape(path)}</p><pre>{html.escape(current_content)}</pre></body></html>",
-        )
-        current_pages.append(str(current_path))
-
-    document = header + (
-        f"<h1>Review: {html.escape(summary)}</h1><p>Green = proposed additions; red = deletions; black = unchanged context.</p>"
-        + "\n".join(sections)
-        + "</body></html>"
-    )
-    review_path = review_folder / "All-articles-proposed-vs-current.html"
-    atomic_write_text(review_path, document)
-    return str(review_path), individual_pages, current_pages
-
-
-def _attach_review_pages(
-    config: LibrarianConfig,
-    review_card: dict[str, Any],
-    proposal_id: str,
-    summary: str,
-    changes: list[dict[str, Any]],
-) -> None:
-    review_page, file_pages, current_pages = _review_pages(config, proposal_id, summary, changes)
-    review_card["review_page"] = review_page
-    for item, file_page, current_page in zip(review_card.get("files", []), file_pages, current_pages):
-        if isinstance(item, dict):
-            item["review_page"] = file_page
-            item["current_page"] = current_page
-
-
-def _review_card(
-    proposal_id: str,
-    summary: str,
-    reasons: list[str],
-    changes: list[dict[str, Any]],
-    root: Path | None = None,
-) -> dict[str, Any]:
-    """Build the compact, user-facing decision payload for a staged proposal.
-
-    The proposal body stays in plugin data, but small pending changes must be
-    directly reviewable. A human should never be asked to approve a deletion
-    without seeing what will disappear.
-    """
-    files: list[dict[str, Any]] = []
-    for change in changes:
-        diff = str(change.get("diff", ""))
-        added, removed = _diff_line_counts(diff)
-        content = change.get("content")
-        action = str(change.get("action", "write"))
-        before = _diff_side_content(diff, "-")
-        after = content if isinstance(content, str) else _diff_side_content(diff, "+")
-        preview_source = before if action == "delete" else after
-        preview, preview_truncated = _content_preview(preview_source) if preview_source else ("", False)
-        title = _first_heading(preview_source)
-        if action == "delete":
-            change_summary = f"Deletes this article ({removed} lines)."
-        elif "placeholder" in before.lower() or "created from durable, actionable newsletter intelligence" in before.lower():
-            change_summary = "Replaces the template placeholder with: " + _first_body_paragraph(after)
-        else:
-            change_summary = "Updates the article with: " + _first_body_paragraph(after)
-        markdown_path = None
-        if root is not None:
-            try:
-                absolute, _ = resolve_inside(root, str(change.get("path", "")))
-                markdown_path = str(absolute)
-            except (ValueError, OSError):
-                pass
-        files.append(
-            {
-                "path": change.get("path"),
-                "action": action,
-                "title": title,
-                "added_lines": added,
-                "removed_lines": removed,
-                "content_label": "Current content to be deleted" if action == "delete" else "Proposed content",
-                "content_preview": preview,
-                "content_preview_truncated": preview_truncated,
-                "markdown_path": markdown_path,
-                "change_summary": change_summary.rstrip(),
-            }
-        )
-    actions = {str(file["action"]) for file in files}
-    primary_action = "delete" if actions == {"delete"} else "write"
-    approve_reply, reject_reply = _review_response(primary_action, len(files))
-    return {
-        "status": "review_needed",
-        "proposal_id": proposal_id,
-        "summary": summary,
-        "why_review": reasons,
-        "change_count": len(files),
-        "files": files,
-        "review_instruction": "Read the visible content previews before deciding. Request a full diff only when a preview is truncated or you need line-level detail.",
-        "decisions": {
-            "approve": approve_reply,
-            "reject": reject_reply,
-            "inspect": f"Show the full diff for proposal {proposal_id}",
-        },
-    }
 
 
 def _prepare_changes(
@@ -585,9 +349,6 @@ def change(config: LibrarianConfig, args: dict[str, Any]) -> str:
         )
         proposal = get_proposal(proposal_id)
         digest = proposal.get("proposal_sha256", "") if proposal else ""
-        review_reasons = list(dict.fromkeys(reasons))
-        review_card = _review_card(proposal_id, summary, review_reasons, proposal_changes, config.knowledge_root)
-        _attach_review_pages(config, review_card, proposal_id, summary, proposal_changes)
         return _result(
             {
                 "status": "review_required",
@@ -595,10 +356,9 @@ def change(config: LibrarianConfig, args: dict[str, Any]) -> str:
                 "proposal_sha256": digest,
                 "proposal_digest": str(digest)[:12],
                 "summary": summary,
-                "reasons": review_reasons,
+                "reasons": list(dict.fromkeys(reasons)),
                 "assessments": assessment_payload,
-                "review_card": review_card,
-                "message": "No canonical files were changed. Present the review card to the human now; do not wait for them to discover the queue.",
+                "message": "No canonical files were changed. Review with librarian_get_proposal or /librarian review.",
             }
         )
 
@@ -636,20 +396,6 @@ def get_proposal_tool(config: LibrarianConfig, args: dict[str, Any]) -> str:
     current_root = str(config.knowledge_root.resolve(strict=False)) if config.knowledge_root else None
     if current_root is None or proposal.get("knowledge_root") != current_root:
         return _result({"error": "proposal not found for the configured knowledge root"})
-    review_card = _review_card(
-        proposal_id,
-        str(proposal.get("summary", "")),
-        [str(reason) for reason in proposal.get("reasons", [])],
-        [change for change in proposal.get("changes", []) if isinstance(change, dict)],
-        config.knowledge_root,
-    )
-    _attach_review_pages(
-        config,
-        review_card,
-        proposal_id,
-        str(proposal.get("summary", "")),
-        [change for change in proposal.get("changes", []) if isinstance(change, dict)],
-    )
     include_content = bool(args.get("include_content", False))
     if not include_content:
         proposal = dict(proposal)
@@ -658,7 +404,7 @@ def get_proposal_tool(config: LibrarianConfig, args: dict[str, Any]) -> str:
             for change in proposal.get("changes", [])
             if isinstance(change, dict)
         ]
-    return _result({"status": "ok", "proposal": proposal, "review_card": review_card})
+    return _result({"status": "ok", "proposal": proposal})
 
 
 def apply_proposal(config: LibrarianConfig, args: dict[str, Any]) -> str:

@@ -55,47 +55,6 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue(target.exists())
         proposal = self.hermes / "plugin-data/agentic-librarian/proposals/pending" / f'{result["proposal_id"]}.json'
         self.assertTrue(proposal.exists())
-        card = result["review_card"]
-        self.assertEqual(card["status"], "review_needed")
-        self.assertEqual(card["change_count"], 1)
-        self.assertEqual(card["files"][0]["path"], "notes/a.md")
-        self.assertEqual(card["files"][0]["removed_lines"], 2)
-        self.assertEqual(card["files"][0]["content_label"], "Current content to be deleted")
-        self.assertEqual(card["files"][0]["content_preview"], "# A\nkeep me")
-        self.assertEqual(card["files"][0]["change_summary"], "Deletes this article (2 lines).")
-        self.assertEqual(card["files"][0]["markdown_path"], str(target))
-        self.assertEqual(card["decisions"]["approve"], "Yes — delete these 1 file.")
-        self.assertNotIn(result["proposal_id"], card["decisions"]["approve"])
-        review_page = Path(card["review_page"])
-        self.assertTrue(review_page.exists())
-        rendered = review_page.read_text(encoding="utf-8")
-        self.assertIn('class="removed"', rendered)
-        self.assertIn('<p class="meta">notes/a.md</p>', rendered)
-        file_review_page = Path(card["files"][0]["review_page"])
-        self.assertTrue(file_review_page.exists())
-        self.assertIn('class="removed"', file_review_page.read_text(encoding="utf-8"))
-        self.assertEqual(file_review_page.name, "01-A-proposed-vs-current.html")
-        current_page = Path(card["files"][0]["current_page"])
-        self.assertTrue(current_page.exists())
-        self.assertIn("Current article: A", current_page.read_text(encoding="utf-8"))
-        self.assertEqual(current_page.name, "01-A-current-article.html")
-
-    def test_proposal_lookup_repeats_compact_review_card(self):
-        target = self.root / "notes/a.md"
-        target.parent.mkdir(); target.write_text("# A\nold\n")
-        staged = self.parse(service.change(self.cfg(), {
-            "risk_flags": ["decision"],
-            "changes": [{"path": "notes/a.md", "action": "write", "content": "# A\nnew\nextra\n"}],
-        }))
-        reviewed = self.parse(service.get_proposal_tool(self.cfg(), {"proposal_id": staged["proposal_id"]}))
-        card = reviewed["review_card"]
-        self.assertEqual(card["proposal_id"], staged["proposal_id"])
-        self.assertEqual(card["files"][0]["added_lines"], 3)
-        self.assertEqual(card["files"][0]["removed_lines"], 2)
-        self.assertEqual(card["files"][0]["content_label"], "Proposed content")
-        self.assertEqual(card["files"][0]["content_preview"], "# A\nnew\nextra\n")
-        self.assertEqual(card["files"][0]["change_summary"], "Updates the article with: new extra")
-        self.assertNotIn("content", reviewed["proposal"]["changes"][0])
 
     def test_tampered_proposal_is_refused(self):
         target = self.root / "notes/a.md"

@@ -1,6 +1,6 @@
 # Hermes Agentic Librarian
 
-Purpose: A local-first Hermes plugin and Codex adapter that govern writes to an existing Markdown knowledge base. Routine low-risk changes may auto-apply. Destructive, conflicting, low-confidence, control-file, raw-source mutation, major-rewrite, and other risky changes are staged for selective human review.
+Purpose: A local-first Hermes Agent plugin that governs writes to an existing Markdown knowledge base. Routine low-risk changes may auto-apply. Destructive, conflicting, low-confidence, control-file, raw-source mutation, major-rewrite, and other risky changes are staged for selective human review.
 
 Canonical architecture:
 - User's Markdown folder / Obsidian vault: source of truth.
@@ -19,7 +19,6 @@ Important trust rules:
 - proposal application is hash-bound and refuses stale bases;
 - same-machine Librarian transactions use a root-keyed local lock plus optimistic base-hash rechecks;
 - pending proposal bodies live outside the knowledge root;
-- every staged proposal returns a compact review card that the active agent must show immediately, including readable proposed-versus-current and preview-safe current-article HTML pages, a color-coded diff (green additions, red deletions, black context), visible small-file before/after content (especially deletions), a short approve/reject decision, and full diffs on request;
 - direct Hermes write_file/patch attempts inside the root are blocked by default;
 - shell guarding is conservative defense-in-depth, not an OS sandbox.
 
@@ -27,8 +26,6 @@ Start here:
 - README.md — human overview, installation, usage.
 - AGENTS.md — coding-agent invariants and contribution instructions.
 - skills/librarian/SKILL.md — runtime Hermes workflow.
-- skills/codex-librarian/SKILL.md — runtime Codex workflow.
-- scripts/codex_librarian.py — Codex adapter sharing the policy core and proposal/receipt store with Hermes.
 - docs/architecture.md — components and transaction state machine.
 - docs/configuration.md — settings and autonomy modes.
 - docs/hermes-llm-wiki.md — how to wrap the built-in llm-wiki skill.

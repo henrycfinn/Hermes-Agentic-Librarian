@@ -40,8 +40,20 @@ class LibrarianConfig:
     prompt_guidance: bool = True
 
 
+def get_setting(ctx: Any, key: str, default: Any = None) -> Any:
+    """Read settings on current and legacy Hermes plugin contexts."""
+    getter = getattr(ctx, "get_config", None)
+    if callable(getter):
+        return getter(key, default=default)
+    return default
+
+
+def has_settings_bridge(ctx: Any) -> bool:
+    return callable(getattr(ctx, "get_config", None)) and callable(getattr(ctx, "set_config", None))
+
+
 def _list_value(ctx: Any, key: str, default: list[str]) -> tuple[str, ...]:
-    value = ctx.get_config(key, default=default)
+    value = get_setting(ctx, key, default=default)
     if not isinstance(value, list):
         return tuple(default)
     return tuple(str(item) for item in value if isinstance(item, (str, int, float)))
@@ -77,13 +89,13 @@ def discover_knowledge_root(explicit: str | None = None) -> Path | None:
 
 
 def load_config(ctx: Any) -> LibrarianConfig:
-    explicit = str(ctx.get_config("knowledge_root", default="") or "")
+    explicit = str(get_setting(ctx, "knowledge_root", default="") or "")
     root = discover_knowledge_root(explicit)
-    policy_mode = str(ctx.get_config("policy_mode", default="balanced") or "balanced").lower()
+    policy_mode = str(get_setting(ctx, "policy_mode", default="balanced") or "balanced").lower()
     if policy_mode not in {"strict", "balanced", "autonomous"}:
         policy_mode = "balanced"
 
-    qmd_sync = str(ctx.get_config("qmd_sync", default="off") or "off").lower()
+    qmd_sync = str(get_setting(ctx, "qmd_sync", default="off") or "off").lower()
     if qmd_sync not in {"off", "update", "update_and_embed"}:
         qmd_sync = "off"
 
@@ -94,21 +106,21 @@ def load_config(ctx: Any) -> LibrarianConfig:
 
     def _float(key: str, default: float) -> float:
         try:
-            return float(ctx.get_config(key, default=default))
+            return float(get_setting(ctx, key, default=default))
         except (TypeError, ValueError):
             return default
 
     def _int(key: str, default: int) -> int:
         try:
-            return int(ctx.get_config(key, default=default))
+            return int(get_setting(ctx, key, default=default))
         except (TypeError, ValueError):
             return default
 
     return LibrarianConfig(
         knowledge_root=root,
         policy_mode=policy_mode,
-        enforce_direct_writes=bool(ctx.get_config("enforce_direct_writes", default=True)),
-        guard_terminal_writes=bool(ctx.get_config("guard_terminal_writes", default=True)),
+        enforce_direct_writes=bool(get_setting(ctx, "enforce_direct_writes", default=True)),
+        guard_terminal_writes=bool(get_setting(ctx, "guard_terminal_writes", default=True)),
         governed_extensions=governed,
         excluded_patterns=_list_value(ctx, "excluded_patterns", [".obsidian/**", ".git/**", ".trash/**", ".Trash/**"]),
         raw_patterns=_list_value(ctx, "raw_patterns", ["raw/**", "sources/**", "Sources/**"]),
@@ -120,8 +132,8 @@ def load_config(ctx: Any) -> LibrarianConfig:
         major_rewrite_ratio=max(0.0, min(1.0, _float("major_rewrite_ratio", 0.35))),
         removal_review_ratio=max(0.0, min(1.0, _float("removal_review_ratio", 0.15))),
         max_auto_changes=max(1, _int("max_auto_changes", 20)),
-        qmd_duplicate_check=bool(ctx.get_config("qmd_duplicate_check", default=True)),
+        qmd_duplicate_check=bool(get_setting(ctx, "qmd_duplicate_check", default=True)),
         qmd_sync=qmd_sync,
-        git_checkpoint=bool(ctx.get_config("git_checkpoint", default=False)),
-        prompt_guidance=bool(ctx.get_config("prompt_guidance", default=True)),
+        git_checkpoint=bool(get_setting(ctx, "git_checkpoint", default=False)),
+        prompt_guidance=bool(get_setting(ctx, "prompt_guidance", default=True)),
     )

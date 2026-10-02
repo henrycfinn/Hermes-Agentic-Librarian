@@ -86,6 +86,21 @@ hermes plugins list
 
 This project avoids imports from Hermes internal modules and uses the documented plugin context surface.
 
+### `PluginContext` has no attribute `get_config`
+
+This indicates an older or partially upgraded Hermes host. Agentic Librarian 1.0.1 can register safely on that host, but persistent plugin settings and the setup wizard require Hermes' native settings bridge. Upgrade/restart Hermes so the backend and Desktop use the same release, then rerun:
+
+```text
+hermes plugins doctor agentic-librarian --ci
+hermes agentic-librarian setup --root /path/to/knowledge --non-interactive
+```
+
+Until upgraded, root discovery can still use `OBSIDIAN_VAULT_PATH`, `WIKI_PATH`, or an existing `~/wiki`; configuration changes are intentionally refused rather than written through undocumented APIs.
+
+## QMD reports `WinError 2` on Windows
+
+Agentic Librarian 1.0.3 prefers the launchable `qmd.cmd` wrapper when QMD is installed through npm. Restart Hermes after upgrading the plugin, then rerun `librarian_doctor`. If QMD is still unavailable, verify `qmd.cmd` is on the PATH of the process launching Hermes.
+
 ## Direct shell command bypassed the plugin
 
 The shell guard is not a security sandbox. It only escalates obvious commands that directly reference the canonical root. See `docs/security.md`.

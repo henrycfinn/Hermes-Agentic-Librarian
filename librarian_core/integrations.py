@@ -17,35 +17,32 @@ def detect_obsidian(root: Path | None) -> bool:
     return bool(root and (root / ".obsidian").is_dir())
 
 
+def _qmd_command() -> str | None:
+    """Resolve QMD to an executable Windows can launch via subprocess."""
+    candidates = ["qmd.cmd", "qmd.exe", "qmd"] if os.name == "nt" else ["qmd"]
+    for candidate in candidates:
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+    return None
+
+
+def _qmd_args(*args: str) -> list[str]:
+    return [_qmd_command() or "qmd", *args]
+
+
 def qmd_available() -> bool:
-    return shutil.which("qmd") is not None
+    return _qmd_command() is not None
 
 
 def git_available() -> bool:
     return shutil.which("git") is not None
 
 
-def _spawn_args(args: list[str]) -> list[str]:
-    """Return executable arguments that also work with Windows batch shims.
-
-    npm exposes command-line packages as ``.cmd`` launchers.  ``shutil.which``
-    finds those launchers, but ``subprocess.run(..., shell=False)`` cannot
-    reliably execute them directly.  Run only a resolved batch launcher via
-    ``cmd.exe``; native executables retain the safer direct invocation.
-    """
-    if os.name != "nt" or not args:
-        return args
-    executable = shutil.which(args[0])
-    if not executable or Path(executable).suffix.lower() not in {".cmd", ".bat"}:
-        return args
-    command = subprocess.list2cmdline([executable, *args[1:]])
-    return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", command]
-
-
 def _run(args: list[str], cwd: Path | None = None, timeout: int = 60) -> tuple[int, str, str]:
     try:
         proc = subprocess.run(
-            _spawn_args(args),
+            args,
             cwd=str(cwd) if cwd else None,
             capture_output=True,
             text=True,
@@ -61,7 +58,7 @@ def _run(args: list[str], cwd: Path | None = None, timeout: int = 60) -> tuple[i
 def qmd_status() -> dict[str, Any]:
     if not qmd_available():
         return {"available": False}
-    code, out, err = _run(["qmd", "status"], timeout=20)
+    code, out, err = _run(_qmd_args("status"), timeout=20)
     return {
         "available": True,
         "ok": code == 0,
@@ -126,7 +123,7 @@ def qmd_duplicate_candidates(root: Path, relative: Path, title_hint: str = "") -
     if len(query) < 3:
         return []
     code, out, _ = _run(
-        ["qmd", "search", query, "--format", "json", "--full-path", "-n", "8"],
+        _qmd_args("search", query, "--format", "json", "--full-path", "-n", "8"),
         cwd=root,
         timeout=15,
     )
@@ -189,13 +186,13 @@ def sync_qmd(mode: str, root: Path) -> dict[str, Any]:
         return {"mode": mode, "attempted": False, "available": False}
 
     result: dict[str, Any] = {"mode": mode, "attempted": True, "available": True}
-    code, out, err = _run(["qmd", "update"], cwd=root, timeout=120)
+    code, out, err = _run(_qmd_args("update"), cwd=root, timeout=120)
     result["update_ok"] = code == 0
     result["update_message"] = (out or err)[-1200:]
     if code != 0 or mode != "update_and_embed":
         return result
 
-    code, out, err = _run(["qmd", "embed"], cwd=root, timeout=300)
+    code, out, err = _run(_qmd_args("embed"), cwd=root, timeout=300)
     result["embed_ok"] = code == 0
     result["embed_message"] = (out or err)[-1200:]
     return result

@@ -2,29 +2,6 @@
 
 Settings live in Hermes' plugin-scoped configuration under `plugins.entries.agentic-librarian.settings`.
 
-## Codex adapter
-
-Codex can use the same core without loading the Hermes plugin. Run the local adapter with the canonical root explicitly:
-
-```powershell
-python scripts/codex_librarian.py --knowledge-root /path/to/knowledge status
-```
-
-The adapter uses the same `HERMES_HOME/plugin-data/agentic-librarian` proposal and receipt store by default, so Codex and Hermes can inspect the same queue. Set `--runtime-home /path/to/hermes-home` when the Hermes home is not available through `HERMES_HOME` or the default location.
-
-`apply` requires `--approve` in addition to normal Codex filesystem approval. Use that flag only after the user has explicitly approved the staged proposal. Its defaults remain balanced policy, QMD sync off, and Git checkpoints off.
-
-### Codex review notifications
-
-When a Codex-routed change returns `review_required`, the Codex Librarian skill treats it as an immediate in-task notification. It retrieves the staged proposal and presents a compact review table with:
-
-- a per-article link to a proposed-versus-current color diff;
-- a plain-English summary of each change, plus added/removed line counts;
-- an optional preview-safe rendering of the current article (rather than a raw local Markdown link that some clients block); and
-- short natural-language approve or reject responses.
-
-The generated review pages are stored outside the knowledge root with the proposal data, so unapproved text cannot enter the canonical wiki or QMD retrieval. Codex does not expose a plugin API for an independent desktop toast or custom button widget; the review card in the active task is the portable notification surface.
-
 ## Root discovery
 
 If `knowledge_root` is empty, the plugin checks in order:

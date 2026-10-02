@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from . import schemas
-from .librarian_core.config import load_config
+from .librarian_core.config import has_settings_bridge, load_config
 from .librarian_core.constants import TERMINAL_MUTATION_MARKERS, TOOLSET
 from .librarian_core.paths import is_governed, resolve_inside
 from .librarian_core import service
@@ -77,6 +77,8 @@ def _register_tools(ctx):
     def configure(args: dict[str, Any], **kwargs) -> str:
         del kwargs
         try:
+            if not has_settings_bridge(ctx):
+                return _json_error("This Hermes host can load Agentic Librarian but does not expose the native plugin settings bridge. Upgrade Hermes or configure knowledge_root through a supported host before using librarian_configure.")
             if "knowledge_root" in args:
                 root = Path(str(args["knowledge_root"])).expanduser().resolve(strict=False)
                 if not root.is_dir():
@@ -254,6 +256,9 @@ def _handle_cli(ctx, args):
             print(json.dumps({"status": "error", "message": f"Knowledge root is not an existing directory: {selected}"}))
             return
 
+    if not has_settings_bridge(ctx):
+        print(json.dumps({"status": "unsupported_host", "message": "This Hermes host does not expose the native plugin settings bridge. Upgrade Hermes before running setup."}))
+        return
     ctx.set_config("knowledge_root", str(selected))
     ctx.set_config("policy_mode", getattr(args, "policy", "balanced"))
     print(json.dumps({"status": "configured", "knowledge_root": str(selected), "policy_mode": getattr(args, "policy", "balanced")}, ensure_ascii=False))

@@ -80,8 +80,6 @@ Applying a staged proposal **re-hashes its target files and the proposal envelop
 - Hermes Agent with the native Python plugin system.
 - Python standard library only for this plugin.
 
-For Codex, use the included local CLI adapter and `codex-librarian` skill; Hermes itself is not required for Codex to run the policy core.
-
 Optional:
 
 - **Obsidian** — detected from `.obsidian/`; no Obsidian plugin is required.
@@ -241,17 +239,6 @@ Nothing else is required. Point `knowledge_root` at a Markdown folder. The plugi
 | `librarian_history` | List receipts without note bodies. |
 | `librarian_configure` | Change core plugin settings through native approval. |
 
-## Codex alongside Hermes
-
-Codex uses the same core rather than a parallel knowledge layer. The adapter shares the proposal and receipt store with Hermes, so a risky change staged by Codex remains visible to Hermes and vice versa.
-
-```powershell
-$env:CODEX_LIBRARIAN_REPO = 'C:\path\to\Hermes-Agentic-Librarian'
-python "$env:CODEX_LIBRARIAN_REPO\scripts\codex_librarian.py" --knowledge-root C:\path\to\knowledge status
-```
-
-Install the versioned `skills/codex-librarian` folder in Codex's global skills directory, then start a new Codex task. The skill routes durable knowledge writes through `change --request`, surfaces staged proposals, and requires both explicit user approval and `apply --approve` to mutate a staged proposal. See [Configuration](docs/configuration.md#codex-adapter).
-
 Slash command:
 
 ```text
@@ -285,9 +272,9 @@ Do not put secrets in these settings. The plugin does not require any.
 
 See [Configuration](docs/configuration.md) for every option and recommended profiles.
 
-## Review is a queue with a decision-ready alert
+## Review is a queue, not a prompt storm
 
-A risky `librarian_change` writes a proposal to profile-scoped plugin data and leaves canonical knowledge unchanged. Its result now includes a compact **review card** designed for fast decisions: readable article-title links to individual proposed-vs-current pages beside plain-English change summaries, plus add/remove counts and review reasons. The optional current-article link opens a preview-safe HTML rendering rather than a raw local Markdown path, because some Hermes clients block direct local-file links. Each review page shows additions in green, deletions in red, and unchanged context in black. An agent must present the compact table immediately; it is not acceptable to make the person discover a queue later or approve a deletion without seeing its contents.
+A risky `librarian_change` does **not** immediately interrupt the human. It writes a proposal to profile-scoped plugin data and leaves canonical knowledge unchanged.
 
 When convenient:
 
@@ -301,7 +288,7 @@ or ask:
 Review the librarian queue and show me only changes that need a decision.
 ```
 
-The review card is an in-task alert, not a background desktop notification, email, or a separate approval inbox. The plugin deliberately has no required daemon or hosted service. On Hermes platforms that support native approvals, final application uses the platform's approve/deny controls; the short text response remains the portable fallback. Only `librarian_apply_proposal` mutates knowledge, preserving an explicit boundary for sensitive cases.
+Only `librarian_apply_proposal` invokes the Hermes approval gate. This keeps routine autonomous activity quiet while preserving an explicit boundary for the sensitive cases.
 
 ## Runtime data
 
@@ -340,8 +327,6 @@ This repository is designed to be discoverable by both people and coding agents:
 - [`AGENTS.md`](AGENTS.md) — implementation invariants and contribution instructions for coding agents;
 - [`llms.txt`](llms.txt) — compact machine-readable project map;
 - [`skills/librarian/SKILL.md`](skills/librarian/SKILL.md) — runtime workflow for Hermes;
-- [`skills/codex-librarian/SKILL.md`](skills/codex-librarian/SKILL.md) — runtime workflow for Codex;
-- [`scripts/codex_librarian.py`](scripts/codex_librarian.py) — local Codex CLI adapter;
 - [`docs/architecture.md`](docs/architecture.md) — component and transaction model;
 - [`docs/configuration.md`](docs/configuration.md) — settings and autonomy modes;
 - [`docs/hermes-llm-wiki.md`](docs/hermes-llm-wiki.md) — wrapper integration;
