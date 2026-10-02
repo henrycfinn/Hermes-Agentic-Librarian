@@ -77,6 +77,8 @@ Use placeholders such as `/path/to/knowledge` and `<owner>` in docs.
 - `librarian_core/integrity.py`: hashes and atomic writes.
 - `librarian_core/integrations.py`: optional local QMD/Obsidian/Git integration.
 - `skills/librarian/SKILL.md`: runtime agent instructions.
+- `scripts/codex_librarian.py`: Codex CLI adapter; reuse the core and shared proposal/receipt store rather than duplicating policy.
+- `skills/codex-librarian/SKILL.md`: Codex runtime workflow.
 - `docs/`: human and agent reference material.
 
 ## Hermes compatibility
@@ -84,6 +86,10 @@ Use placeholders such as `/path/to/knowledge` and `<owner>` in docs.
 Use documented Hermes plugin surfaces (`ctx.register_tool`, `ctx.register_hook`, `ctx.register_command`, `ctx.register_skill`, `ctx.get_config`, `ctx.set_config`, `ctx.register_system_prompt_section` when available). The documented `plugins.plugin_storage.plugin_data_dir` helper is also permitted for durable plugin files. Avoid undocumented Hermes internal modules.
 
 The repository intentionally keeps a compatibility fallback for Hermes builds that do not expose system prompt sections.
+
+## Codex compatibility
+
+Codex uses `scripts/codex_librarian.py` and the `codex-librarian` skill, not the Hermes plugin registration boundary. The adapter must preserve the core policy, version-bound proposals, and shared runtime storage. It must require an explicit `--approve` after the user approves a staged proposal; Codex sandbox approval alone is not that semantic approval.
 
 Before a release, run `hermes plugins doctor . --ci` on a current Hermes installation. Do not claim compatibility solely from unit tests.
 
