@@ -1,6 +1,6 @@
 ---
 name: librarian
-version: 1.0.0
+version: 1.1.0
 description: "Trust-aware autonomous governance for Markdown knowledge bases; works with Hermes llm-wiki, Obsidian, QMD, and plain folders."
 author: Community
 license: MIT
@@ -143,15 +143,15 @@ Risk flags can only escalate. They never turn a deterministic review decision in
 Possible results include:
 
 - `auto_applied`: canonical files changed and a receipt was recorded;
-- `review_required`: canonical files were not changed; a durable proposal ID was created;
+- `review_required`: canonical files were not changed; a durable proposal ID and compact `review_card` were created;
 - `dry_run`: classification/diffs only;
 - an error or block: fix the input rather than bypassing governance.
 
-Do not interrupt the user merely because a proposal exists unless it blocks the requested task or is important enough to surface. The intended experience is autonomous by default with a small review queue.
+When a proposal is staged during the active task, immediately present the `review_card` to the user. It is the review-ready alert: make a compact table the primary review surface with **Article** (render per-file `review_page` as the clickable proposed-vs-current diff), **What changes** (use `change_summary`, add/remove counts, and the reason for review), and an optional **Current article** link (render the preview-safe `current_page`, not `markdown_path`). The overall `review_page` remains a color-coded all-files diff: green additions, red deletions, and black unchanged context. Use readable article titles as link labels, never opaque generated filenames. Show visible before/after content inline only for deletions or when requested; never ask a user to approve a deletion without showing what would be deleted. Use the card's short natural-language approve/reject replies rather than making the user repeat a proposal ID. Where the host supports native approval buttons, route final application through that gate; otherwise retain the short text fallback. Do not expect the user to discover a queue or a separate notification center. Routine low-risk changes remain autonomous, so this only occurs when a review gate is already required.
 
 ### 7. Review only when useful
 
-Use `librarian_review_queue` to list pending items. Use `librarian_get_proposal` for the diff and reasons.
+Use `librarian_review_queue` to list pending items. Use `librarian_get_proposal` for its review card, diff, and reasons. Start with the compact card; provide full unified diffs or full proposed content only for the files the user asks to inspect.
 
 `librarian_apply_proposal` uses Hermes' native approval gate and then performs a stale-base check. If a target changed after proposal creation, the proposal is moved to stale and is not applied.
 

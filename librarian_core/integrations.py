@@ -25,10 +25,27 @@ def git_available() -> bool:
     return shutil.which("git") is not None
 
 
+def _spawn_args(args: list[str]) -> list[str]:
+    """Return executable arguments that also work with Windows batch shims.
+
+    npm exposes command-line packages as ``.cmd`` launchers.  ``shutil.which``
+    finds those launchers, but ``subprocess.run(..., shell=False)`` cannot
+    reliably execute them directly.  Run only a resolved batch launcher via
+    ``cmd.exe``; native executables retain the safer direct invocation.
+    """
+    if os.name != "nt" or not args:
+        return args
+    executable = shutil.which(args[0])
+    if not executable or Path(executable).suffix.lower() not in {".cmd", ".bat"}:
+        return args
+    command = subprocess.list2cmdline([executable, *args[1:]])
+    return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", command]
+
+
 def _run(args: list[str], cwd: Path | None = None, timeout: int = 60) -> tuple[int, str, str]:
     try:
         proc = subprocess.run(
-            args,
+            _spawn_args(args),
             cwd=str(cwd) if cwd else None,
             capture_output=True,
             text=True,
